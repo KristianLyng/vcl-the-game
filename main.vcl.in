@@ -1,0 +1,64 @@
+vcl 4.0;
+
+import std;
+
+backend local {
+	.host = "localhost";
+	.port = "1111";
+}
+
+sub vcl_recv {
+	if (include "$PWD/bar.vcl";) {
+		return (synth(200));
+	}
+}
+
+sub vcl_hash {
+	hash_data(std.strstr(req.url,"/doc"));
+	return (lookup);
+}
+
+sub vcl_synth {
+	if (resp.status == 200) {
+		if (req.url ~ "/doc") {
+			synthetic(std.fileread("main.vcl"));
+		} else {
+			set resp.http.x-ans = regsub(std.random(1,100),"\..*","");
+		}
+	} elseif (resp.status > 600) {
+		if (resp.status == 650) {
+			synthetic(req.http.foo + {"
+"});
+
+		} elseif (resp.status == 620) {
+			synthetic("WE GOT A WINNER!"+{"
+"});
+		}
+	} elseif (resp.status < 200) {
+		synthetic("TOO LOW!"+{"
+"});
+	} elsif (resp.status > 200) {
+		synthetic("TOO BIG!"+{"
+"});
+	}
+	set resp.status = 200;
+	return (deliver);
+}
+
+sub vcl_deliver {
+	set req.http.x-ans = resp.http.x-ans;
+	if (resp.http.x-ans == regsub(req.url,"/","")) {
+		ban("req.url ~ .*");
+		return(synth(620));
+	} else if (obj.hits > 8) {
+		set req.http.foo = "NOPE! YOU LOOSE! NEW NUMBER! The answer was:" + resp.http.x-ans;
+		ban("req.url ~ .*");
+		return (synth(650));
+	}
+	if (std.real(resp.http.x-ans,0) < std.real(regsub(req.url,"/",""),0)) {
+		return(synth(201));
+	}
+	if (std.real(resp.http.x-ans,0) > std.real(regsub(req.url,"/",""),0)) {
+		return(synth(199));
+	}
+}
